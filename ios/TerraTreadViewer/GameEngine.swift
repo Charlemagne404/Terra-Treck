@@ -347,6 +347,13 @@ enum GameEngine {
             .filter { level >= $0.unlockLevel }
             .map(\.type)
         let nextUnlock = buildingEntries().first { level < $0.unlockLevel }?.type
+        let stage = cityStage(for: level)
+        let narrative = cityNarrative(
+            for: stage,
+            stats: stats,
+            buildings: normalizedBuildings,
+            nextUnlock: nextUnlock
+        )
 
         return CitySummary(
             level: level,
@@ -362,7 +369,9 @@ enum GameEngine {
             nextUnlock: nextUnlock,
             buildingCount: normalizedBuildings.count,
             triggeredSynergies: triggeredSynergies,
-            breakdown: breakdown
+            breakdown: breakdown,
+            stage: stage,
+            narrative: narrative
         )
     }
 
@@ -422,6 +431,13 @@ enum GameEngine {
         col <= TerraTreadRules.worldMaxCoordinate
     }
 
+    static func isTileInCurrentBuildArea(row: Int, col: Int) -> Bool {
+        row >= TerraTreadRules.initialBuildMinCoordinate &&
+        row <= TerraTreadRules.initialBuildMaxCoordinate &&
+        col >= TerraTreadRules.initialBuildMinCoordinate &&
+        col <= TerraTreadRules.initialBuildMaxCoordinate
+    }
+
     static func canPlaceBuilding(_ buildings: [PlacedBuilding], type: BuildingType, row: Int, col: Int, ignoring buildingID: String? = nil) -> PlacementResult {
         let tiles = footprint(for: type, row: row, col: col)
         let isOutOfBounds = tiles.contains { tile in
@@ -430,6 +446,13 @@ enum GameEngine {
 
         if isOutOfBounds {
             return PlacementResult(ok: false, reason: "out-of-bounds", tiles: tiles)
+        }
+
+        let isOutsideCurrentBuildArea = tiles.contains { tile in
+            !isTileInCurrentBuildArea(row: tile.row, col: tile.col)
+        }
+        if isOutsideCurrentBuildArea {
+            return PlacementResult(ok: false, reason: "locked-area", tiles: tiles)
         }
 
         let filteredBuildings = sanitizedBuildings(buildings).filter { $0.id != ignoring(buildingID) }
@@ -727,6 +750,124 @@ enum GameEngine {
         level < TerraTreadRules.levelThresholds.count ? TerraTreadRules.levelThresholds[level] : nil
     }
 
+    private static func cityStage(for level: Int) -> CityStage {
+        switch level {
+        case ...1:
+            .homestead
+        case 2...3:
+            .village
+        case 4...5:
+            .township
+        case 6...7:
+            .borough
+        default:
+            .city
+        }
+    }
+
+    private static func cityNarrative(
+        for stage: CityStage,
+        stats: EffectTotals,
+        buildings: [PlacedBuilding],
+        nextUnlock: BuildingType?
+    ) -> CityNarrative {
+        let themePrefix: String = switch dominantMetric(for: stats) {
+        case .commerce:
+            "Market"
+        case .ecology:
+            "Garden"
+        case .happiness:
+            "Lantern"
+        default:
+            "Neighborly"
+        }
+
+        let title = "\(themePrefix) \(stage.settlementNoun)"
+        let subtitle: String = switch stage {
+        case .homestead:
+            "A tiny settlement is forming from your first consistent walks."
+        case .village:
+            "The town is spreading into a recognizable village of homes, greens, and routines."
+        case .township:
+            "Older lanes and newer public spaces are starting to layer into a real town."
+        case .borough:
+            "Dense districts are emerging, but the earlier streets still shape the city's character."
+        case .city:
+            "The settlement now feels like a lived-in city with history visible in every district."
+        }
+
+        let atmosphere: String = switch dominantMetric(for: stats) {
+        case .population:
+            "The strongest feeling right now is neighborhood life: homes, familiar routes, and steady daily use."
+        case .commerce:
+            "The city is developing a main-street rhythm, with busier corners and denser activity."
+        case .happiness:
+            "The map leans warm and welcoming, with public spaces doing a lot of emotional work."
+        case .ecology:
+            "Green space is defining the tone, keeping the settlement soft, calm, and grounded."
+        default:
+            "Each walk is adding another quiet layer to a city that feels personal rather than optimized."
+        }
+
+        let heritage: String
+        if buildings.isEmpty {
+            heritage = "Your first few placements will become the founding district that later growth builds around."
+        } else {
+            let foundingTypes = buildings
+                .sorted { buildingAgeRank(for: $0) < buildingAgeRank(for: $1) }
+                .prefix(3)
+                .map { buildingDefinition(for: $0.type).label.lowercased() }
+            let foundingLabel = ListFormatter.localizedString(byJoining: foundingTypes)
+
+            if buildings.count <= 3 {
+                heritage = "The founding \(foundingLabel) already set the tone for the whole settlement."
+            } else {
+                heritage = "The founding \(foundingLabel) still sit inside newer blocks, giving the city a sense of history."
+            }
+        }
+
+        let nextChapter: String
+        if let nextUnlock {
+            let definition = buildingDefinition(for: nextUnlock)
+            nextChapter = "Keep walking to unlock the \(definition.label.lowercased()) and widen the city's next district."
+        } else {
+            nextChapter = "Future walks can thicken older neighborhoods with upgrades while preserving their original character."
+        }
+
+        return CityNarrative(
+            title: title,
+            subtitle: subtitle,
+            atmosphere: atmosphere,
+            heritage: heritage,
+            nextChapter: nextChapter
+        )
+    }
+
+    private static func dominantMetric(for stats: EffectTotals) -> ContractMetric {
+        let ordered: [(ContractMetric, Int)] = [
+            (.population, stats.population),
+            (.commerce, stats.commerce),
+            (.happiness, stats.happiness),
+            (.ecology, stats.ecology),
+        ]
+
+        return ordered.max { lhs, rhs in
+            if lhs.1 == rhs.1 {
+                return lhs.0.rawValue > rhs.0.rawValue
+            }
+            return lhs.1 < rhs.1
+        }?.0 ?? .population
+    }
+
+    private static func buildingAgeRank(for building: PlacedBuilding) -> Int {
+        let numericParts = building.id.split(whereSeparator: { !$0.isNumber })
+        guard let last = numericParts.last,
+              let rank = Int(last) else {
+            return .max
+        }
+        return rank
+    }
+
     private static func pickContractTemplate(for slot: ContractSlot, state: GameState, summary: CitySummary, date: Date) -> ContractTemplate {
         let templates = slot == .weekly ? weeklyContractTemplates : dailyContractTemplates
         let eligibleTemplates = templates.filter { $0.isAvailable(state, summary) }
@@ -739,8 +880,8 @@ enum GameEngine {
     private static func hasOpenPlot(_ buildings: [PlacedBuilding]) -> Bool {
         let occupied = Set(sanitizedBuildings(buildings).flatMap(footprint(for:)))
 
-        for row in TerraTreadRules.worldMinCoordinate...TerraTreadRules.worldMaxCoordinate {
-            for col in TerraTreadRules.worldMinCoordinate...TerraTreadRules.worldMaxCoordinate where !occupied.contains(GridPoint(row: row, col: col)) {
+        for row in TerraTreadRules.initialBuildMinCoordinate...TerraTreadRules.initialBuildMaxCoordinate {
+            for col in TerraTreadRules.initialBuildMinCoordinate...TerraTreadRules.initialBuildMaxCoordinate where !occupied.contains(GridPoint(row: row, col: col)) {
                 return true
             }
         }

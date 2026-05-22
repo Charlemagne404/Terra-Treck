@@ -11,12 +11,12 @@ final class GameStore {
     var streakSummary = StreakSummary()
     var currentUser: AuthenticatedUser?
 
+    var isBuildMode = false
     var selectedBuildingID: String?
     var selectedBuildType: BuildingType?
     var relocationBuildingID: String?
     var pendingPlacement: PendingPlacement?
 
-    var isShowingBuildCatalog = false
     var isShowingLoginSheet = false
     var notice: AppNotice?
 
@@ -70,7 +70,7 @@ final class GameStore {
     }
 
     var inPlacementMode: Bool {
-        selectedBuildType != nil || relocationBuildingID != nil
+        isBuildMode || relocationBuildingID != nil
     }
 
     @ObservationIgnored private let persistence: GamePersistence
@@ -151,26 +151,63 @@ final class GameStore {
         notice = nil
     }
 
-    func openBuildCatalog() {
-        isShowingBuildCatalog = true
+    func toggleBuildMode() {
+        if isBuildMode {
+            exitBuildMode()
+        } else {
+            enterBuildMode()
+        }
+    }
+
+    func enterBuildMode() {
+        isBuildMode = true
+        selectedBuildingID = nil
+        relocationBuildingID = nil
+        pendingPlacement = nil
     }
 
     func startBuilding(_ type: BuildingType) {
+        isBuildMode = true
         selectedBuildType = type
         relocationBuildingID = nil
         pendingPlacement = nil
         selectedBuildingID = nil
-        isShowingBuildCatalog = false
+    }
+
+    func exitBuildMode() {
+        isBuildMode = false
+        selectedBuildType = nil
+        pendingPlacement = nil
+        selectedBuildingID = nil
     }
 
     func cancelPlacementMode() {
-        selectedBuildType = nil
+        exitBuildMode()
         relocationBuildingID = nil
+    }
+
+    func clearPendingPlacement() {
         pendingPlacement = nil
     }
 
     func handleTileTap(row: Int, col: Int) {
-        if let selectedBuildType {
+        if isBuildMode {
+            guard let selectedBuildType else {
+                pendingPlacement = nil
+                selectedBuildingID = nil
+                return
+            }
+
+            let definition = GameEngine.buildingDefinition(for: selectedBuildType)
+            guard state.availableSteps >= definition.cost else {
+                pendingPlacement = nil
+                notice = AppNotice(
+                    title: "More Steps Needed",
+                    message: "You need \(max(0, definition.cost - state.availableSteps)) more steps to place a \(definition.label.lowercased())."
+                )
+                return
+            }
+
             let placement = GameEngine.canPlaceBuilding(state.buildings, type: selectedBuildType, row: row, col: col)
             pendingPlacement = PendingPlacement(
                 mode: .build(selectedBuildType),
@@ -221,16 +258,18 @@ final class GameStore {
         switch pendingPlacement.mode {
         case .build(let type):
             let result = GameEngine.applyBuildAction(state: &state, type: type, row: pendingPlacement.row, col: pendingPlacement.col)
-            guard result.ok, let building = result.building else {
+            guard result.ok else {
                 undoStack.removeLast()
                 notice = AppNotice(title: "Build Failed", message: actionMessage(for: result.error))
                 return
             }
 
-            selectedBuildType = nil
             relocationBuildingID = nil
             self.pendingPlacement = nil
-            selectedBuildingID = building.id
+            selectedBuildingID = nil
+            if state.availableSteps < GameEngine.buildingDefinition(for: type).cost {
+                selectedBuildType = nil
+            }
             reconcileState()
 
         case .move(let buildingID, _):
@@ -250,11 +289,14 @@ final class GameStore {
 
     func undo() {
         guard let previous = undoStack.popLast() else { return }
+        let preservedBuildMode = isBuildMode
+        let preservedBuildType = selectedBuildType
         state = previous
-        selectedBuildType = nil
         relocationBuildingID = nil
         pendingPlacement = nil
         selectedBuildingID = nil
+        isBuildMode = preservedBuildMode
+        selectedBuildType = preservedBuildMode ? preservedBuildType : nil
         reconcileState(touch: false)
     }
 
@@ -267,6 +309,7 @@ final class GameStore {
             return
         }
 
+        isBuildMode = false
         selectedBuildType = nil
         relocationBuildingID = selectedBuilding.id
         pendingPlacement = nil
@@ -307,6 +350,7 @@ final class GameStore {
         recordUndoSnapshot()
         _ = GameEngine.applyResetAction(state: &state)
         selectedBuildingID = nil
+        isBuildMode = false
         selectedBuildType = nil
         relocationBuildingID = nil
         pendingPlacement = nil
@@ -618,6 +662,8 @@ final class GameStore {
         switch code {
         case "occupied":
             "Another district already covers that footprint."
+        case "locked-area":
+            "That district is outside your current build zone."
         case "out-of-bounds":
             "That district would cross the city boundary."
         default:
@@ -633,6 +679,8 @@ final class GameStore {
             "You need more steps in your bank to do that."
         case "occupied":
             "Another district already occupies that destination."
+        case "locked-area":
+            "That plot is outside your current build zone."
         case "out-of-bounds":
             "That placement would cross the city boundary."
         case "max-level":

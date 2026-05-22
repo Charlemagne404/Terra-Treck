@@ -29,3 +29,11 @@ Original prompt: Look trough this project and find errors then fix them. Just im
 - after upgrade: both contracts completed, upgraded house at row 10 col 8, steps 440.
 - after claims: steps 1130 with both contracts marked claimed.
 - after demolish: 4 houses remain and steps total 1242.
+
+- VIBE pass:
+- Added city narrative metadata so the app can describe the settlement as a growing place with atmosphere, heritage, and a next chapter instead of only reporting raw stats.
+- Reframed visible copy around walking as the engine for city growth: mission copy, city overview text, and build catalog messaging now emphasize calm long-term development.
+- Reworked the iOS city board rendering away from flat debug-style tiles into warmer terrain, road hints, more architectural silhouettes, softer trees, and richer district presentation by type and level.
+- Added richer building flavor text and roles in the catalog and selection sheets so districts feel like parts of a town, not just stat packages.
+- Verification:
+- `xcodebuild -project ios/TerraTreadViewer.xcodeproj -scheme TerraTread -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build` succeeds.

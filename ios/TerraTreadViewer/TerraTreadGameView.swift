@@ -1,6 +1,18 @@
 import Observation
 import SwiftUI
 
+private let sceneCardFill = Color(red: 0.96, green: 0.95, blue: 0.91)
+private let sceneCardTint = Color(red: 0.90, green: 0.93, blue: 0.89)
+private let sceneCardStroke = Color.white.opacity(0.52)
+private let sceneInk = Color(red: 0.16, green: 0.22, blue: 0.20)
+private let sceneMutedInk = Color(red: 0.33, green: 0.40, blue: 0.37)
+private let sceneSoftInk = Color(red: 0.47, green: 0.54, blue: 0.51)
+private let sceneForest = Color(red: 0.18, green: 0.46, blue: 0.40)
+private let sceneForestDeep = Color(red: 0.10, green: 0.24, blue: 0.22)
+private let sceneSun = Color(red: 0.95, green: 0.78, blue: 0.33)
+private let sceneRose = Color(red: 0.78, green: 0.47, blue: 0.43)
+private let sceneTrack = Color.black.opacity(0.08)
+
 private enum GameTab: Hashable {
     case city
     case missions
@@ -73,9 +85,6 @@ struct RootView: View {
                 store.refreshForForeground()
             }
         }
-        .sheet(isPresented: $bindableStore.isShowingBuildCatalog) {
-            BuildCatalogSheet(store: store)
-        }
         .sheet(isPresented: $bindableStore.isShowingLoginSheet) {
             AuthWebSheet(
                 configuration: configuration,
@@ -120,7 +129,7 @@ private struct GameHeaderView: View {
                         .foregroundStyle(.white)
                         .shadow(color: Color.black.opacity(0.30), radius: 10, x: 0, y: 4)
 
-                    Text("Build a district from your daily steps.")
+                    Text(store.citySummary.narrative.subtitle)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.white.opacity(0.78))
                         .shadow(color: Color.black.opacity(0.24), radius: 8, x: 0, y: 3)
@@ -149,7 +158,7 @@ private struct GameHeaderView: View {
                             .foregroundStyle(Color(red: 0.17, green: 0.20, blue: 0.18))
                     }
 
-                    Text("Prosperity \(store.citySummary.prosperity)")
+                    Text(store.citySummary.narrative.title)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.75))
                         .shadow(color: Color.black.opacity(0.24), radius: 8, x: 0, y: 3)
@@ -186,41 +195,16 @@ private struct MissionSceneView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: 16) {
+                TrekHeroCard(store: store, goalStatusText: goalStatusText)
+
                 GameSurfaceCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Daily Trek")
-                            .font(.headline.weight(.bold))
-
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("\(store.streakSummary.streak.current)")
-                                .font(.system(size: 42, weight: .black, design: .rounded))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Current streak")
-                                    .font(.headline)
-                                Text("Best run \(store.streakSummary.streak.longest) days")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-
-                        ProgressMeter(
-                            title: "Today",
-                            current: store.streakSummary.dailyGoal.currentSteps,
-                            target: store.streakSummary.dailyGoal.targetSteps
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeading(
+                            eyebrow: "Contracts",
+                            title: "City Plans",
+                            detail: "Small goals that help the town fill in naturally without turning the game into a grind."
                         )
-
-                        Text(goalStatusText)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color(red: 0.21, green: 0.30, blue: 0.26))
-                    }
-                }
-
-                GameSurfaceCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Contracts")
-                            .font(.headline.weight(.bold))
 
                         ContractCard(
                             evaluation: store.dailyContractEvaluation,
@@ -236,19 +220,15 @@ private struct MissionSceneView: View {
 
                 if !store.streakSummary.recentDailyTotals.isEmpty {
                     GameSurfaceCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Recent Runs")
-                                .font(.headline.weight(.bold))
+                        VStack(alignment: .leading, spacing: 14) {
+                            SectionHeading(
+                                eyebrow: "History",
+                                title: "Recent Walks",
+                                detail: "A quick read on how your recent movement is feeding the city."
+                            )
 
                             ForEach(store.streakSummary.recentDailyTotals) { total in
-                                HStack {
-                                    Text(total.dayKey)
-                                        .font(.subheadline.weight(.semibold))
-                                    Spacer()
-                                    Text("\(total.totalSteps.formatted()) steps")
-                                        .font(.subheadline.weight(.bold))
-                                        .foregroundStyle(total.totalSteps >= TerraTreadRules.dailyGoal ? .green : .secondary)
-                                }
+                                RecentWalkRow(total: total)
                             }
                         }
                     }
@@ -263,16 +243,16 @@ private struct MissionSceneView: View {
     private var goalStatusText: String {
         let goal = store.streakSummary.dailyGoal
         if goal.rewardClaimed {
-            return "Today's bonus is already claimed. Keep your streak alive tomorrow."
+            return "Today's bonus is already claimed. The city can rest until your next walk."
         }
         if let reward = store.streakSummary.rewards.claimable.first(where: { $0.type == "daily-goal" }) {
-            return "Daily reward ready: +\(reward.steps) steps."
+            return "Today's walk already funded a new burst of growth: +\(reward.steps) steps ready."
         }
         if let reward = store.streakSummary.rewards.claimable.first(where: { $0.type == "streak-milestone" }) {
-            return "\(reward.streakLength ?? 0)-day streak bonus unlocked: +\(reward.steps) steps."
+            return "\(reward.streakLength ?? 0)-day rhythm bonus unlocked: +\(reward.steps) steps."
         }
         if goal.completed {
-            return "Goal reached. Syncing your reward."
+            return "Goal reached. Folding those steps into the city now."
         }
         return "Need \(goal.remainingSteps.formatted()) more steps for +\(goal.rewardSteps) steps."
     }
@@ -284,67 +264,52 @@ private struct ProfileSceneView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 14) {
-                GameSurfaceCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Account")
-                            .font(.headline.weight(.bold))
-
-                        if let currentUser = store.currentUser {
-                            Text(currentUser.label)
-                                .font(.title3.weight(.bold))
-                            Text("Cloud sync and streak tracking are active for this player.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-
-                            Button("Sign Out", role: .destructive) {
-                                store.signOut()
-                            }
-                            .buttonStyle(.bordered)
-                        } else {
-                            Text("Guest Mode")
-                                .font(.title3.weight(.bold))
-                            Text("Sign in with Continental ID to sync your city, keep streaks across devices, and upload native step totals to the backend.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-
-                            Button(store.canAuthenticateInApp ? "Sign In" : "Sign-In Unavailable") {
-                                showSignIn()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color(red: 0.18, green: 0.45, blue: 0.40))
-                            .disabled(!store.canAuthenticateInApp)
-                        }
-                    }
-                }
+            VStack(spacing: 16) {
+                ProfileHeroCard(store: store, showSignIn: showSignIn)
 
                 GameSurfaceCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Sync")
-                            .font(.headline.weight(.bold))
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeading(
+                            eyebrow: "Systems",
+                            title: "Sync & Movement",
+                            detail: "Your phone steps, backend connection, and cloud city should all read clearly at a glance."
+                        )
 
-                        InfoRow(title: "Connection", value: store.connectionStatusText)
-                        InfoRow(title: "Cloud Save", value: store.cloudStatusText)
-                        InfoRow(title: "Native Steps", value: store.nativeSyncSummary)
+                        SyncStatusRow(title: "Connection", value: store.connectionStatusText, tone: store.connectionStatusTone)
+                        SyncStatusRow(title: "Cloud Save", value: store.cloudStatusText, tone: store.cloudStatusTone)
+                        SyncStatusRow(title: "Native Steps", value: store.nativeSyncSummary, tone: .muted)
 
                         Button("Refresh Backend State") {
                             store.manualSync()
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(Color(red: 0.95, green: 0.78, blue: 0.33))
+                        .tint(sceneSun)
                         .disabled(store.currentUser == nil)
                     }
                 }
 
                 GameSurfaceCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("District Snapshot")
-                            .font(.headline.weight(.bold))
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeading(
+                            eyebrow: "City",
+                            title: "Town Snapshot",
+                            detail: store.citySummary.narrative.atmosphere
+                        )
 
-                        InfoRow(title: "Buildings", value: "\(store.citySummary.buildingCount)")
-                        InfoRow(title: "Prosperity", value: "\(store.citySummary.prosperity)")
-                        InfoRow(title: "Trees", value: "\(store.state.trees.count)")
+                        CityNarrativePanel(
+                            title: store.citySummary.narrative.title,
+                            detail: store.citySummary.narrative.heritage
+                        )
+
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                            SnapshotMetricCard(symbol: "square.grid.3x3.fill", title: "Buildings", value: "\(store.citySummary.buildingCount)")
+                            SnapshotMetricCard(symbol: "building.2.fill", title: "Stage", value: store.citySummary.stage.label)
+                            SnapshotMetricCard(symbol: "sparkles", title: "Prosperity", value: "\(store.citySummary.prosperity)")
+                            SnapshotMetricCard(symbol: "tree.fill", title: "Trees", value: "\(store.state.trees.count)")
+                        }
+
                         InfoRow(title: "Undo Buffer", value: store.canUndo ? "Available" : "Empty")
+                        InfoRow(title: "Next Chapter", value: store.citySummary.narrative.nextChapter)
                     }
                 }
             }
@@ -355,27 +320,276 @@ private struct ProfileSceneView: View {
     }
 }
 
+private struct TrekHeroCard: View {
+    let store: GameStore
+    let goalStatusText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Daily Trek")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.72))
+
+                    Text("Every walk leaves a mark on your city.")
+                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    Text("Stay steady, fund the next block, and let the settlement thicken day by day.")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.84))
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 8) {
+                    Text("\(store.streakSummary.dailyGoal.currentSteps.formatted())")
+                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    Text("steps today")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.74))
+                }
+            }
+
+            HStack(spacing: 10) {
+                HeroMetricPill(
+                    symbol: "flame.fill",
+                    value: "\(store.streakSummary.streak.current)",
+                    label: "Current streak"
+                )
+                HeroMetricPill(
+                    symbol: "figure.walk.motion",
+                    value: "\(store.streakSummary.streak.longest)",
+                    label: "Best run"
+                )
+                HeroMetricPill(
+                    symbol: "gift.fill",
+                    value: "+\(activeRewardSteps)",
+                    label: "Next reward"
+                )
+            }
+
+            ProgressMeter(
+                title: "Daily Goal",
+                current: store.streakSummary.dailyGoal.currentSteps,
+                target: store.streakSummary.dailyGoal.targetSteps,
+                titleColor: .white.opacity(0.72),
+                valueColor: .white,
+                trackColor: Color.white.opacity(0.16)
+            )
+
+            Text(goalStatusText)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            sceneForestDeep,
+                            sceneForest,
+                            Color(red: 0.40, green: 0.58, blue: 0.50),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10))
+                )
+                .shadow(color: Color.black.opacity(0.18), radius: 20, x: 0, y: 12)
+        )
+    }
+
+    private var activeRewardSteps: Int {
+        if let reward = store.streakSummary.rewards.claimable.first {
+            return reward.steps
+        }
+        return store.streakSummary.dailyGoal.rewardSteps
+    }
+}
+
+private struct ProfileHeroCard: View {
+    let store: GameStore
+    let showSignIn: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color.white.opacity(0.14))
+
+                    Image(systemName: store.currentUser == nil ? "person.crop.circle.badge.questionmark" : "person.crop.circle.badge.checkmark")
+                        .font(.system(size: 28, weight: .black))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 62, height: 62)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(store.currentUser?.label ?? "Guest Mode")
+                        .font(.title3.weight(.black))
+                        .foregroundStyle(.white)
+
+                    Text(accountDescription)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.82))
+                }
+
+                Spacer(minLength: 8)
+            }
+
+            HStack(spacing: 10) {
+                HeroMetricPill(symbol: "building.2.fill", value: store.citySummary.stage.label, label: "City stage")
+                HeroMetricPill(symbol: "sparkles", value: "\(store.citySummary.level)", label: "Level")
+            }
+
+            Group {
+                if store.currentUser != nil {
+                    Button("Sign Out", role: .destructive) {
+                        store.signOut()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                } else {
+                    Button(store.canAuthenticateInApp ? "Sign In to Sync" : "Sign-In Unavailable") {
+                        showSignIn()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(sceneSun)
+                    .disabled(!store.canAuthenticateInApp)
+                }
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.23, green: 0.20, blue: 0.31),
+                            Color(red: 0.20, green: 0.39, blue: 0.47),
+                            Color(red: 0.46, green: 0.62, blue: 0.58),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10))
+                )
+                .shadow(color: Color.black.opacity(0.18), radius: 20, x: 0, y: 12)
+        )
+    }
+
+    private var accountDescription: String {
+        if store.currentUser != nil {
+            return "Cloud sync and streak tracking are active for this player."
+        }
+        return "Sign in with Continental ID to keep your city, streaks, and native step history tied together across devices."
+    }
+}
+
+private struct SectionHeading: View {
+    let eyebrow: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(eyebrow.uppercased())
+                .font(.caption.weight(.black))
+                .tracking(0.8)
+                .foregroundStyle(sceneForest)
+
+            Text(title)
+                .font(.title3.weight(.black))
+                .foregroundStyle(sceneInk)
+
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(sceneMutedInk)
+        }
+    }
+}
+
+private struct HeroMetricPill: View {
+    let symbol: String
+    let value: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.headline.weight(.black))
+                .foregroundStyle(.white)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.subheadline.weight(.black))
+                    .foregroundStyle(.white)
+
+                Text(label)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
 private struct ContractCard: View {
     let evaluation: ContractEvaluation
     let claim: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(evaluation.contract.title)
-                    .font(.headline)
-                Spacer()
-                Text(evaluation.contract.slot.label)
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(red: 0.20, green: 0.49, blue: 0.42).opacity(0.14), in: Capsule())
-                    .foregroundStyle(Color(red: 0.20, green: 0.49, blue: 0.42))
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(evaluation.contract.title)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(sceneInk)
 
-            Text(evaluation.contract.description)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                    Text(evaluation.contract.description)
+                        .font(.subheadline)
+                        .foregroundStyle(sceneMutedInk)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 8) {
+                    Text(evaluation.contract.slot.label)
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(sceneForest.opacity(0.14), in: Capsule())
+                        .foregroundStyle(sceneForest)
+
+                    Text("+\(evaluation.contract.rewardSteps)")
+                        .font(.caption.weight(.black))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(sceneSun.opacity(0.24), in: Capsule())
+                        .foregroundStyle(sceneInk)
+                }
+            }
 
             ProgressMeter(
                 title: evaluation.contract.metricKey.label.capitalized,
@@ -386,16 +600,16 @@ private struct ContractCard: View {
             HStack {
                 Text(statusText)
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(sceneMutedInk)
                 Spacer()
                 Button(buttonTitle, action: claim)
                     .buttonStyle(.borderedProminent)
                     .disabled(!evaluation.completed || evaluation.contract.claimed)
-                    .tint(Color(red: 0.21, green: 0.45, blue: 0.38))
+                    .tint(sceneForest)
             }
         }
         .padding(16)
-        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(sceneCardTint, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var buttonTitle: String {
@@ -423,16 +637,20 @@ struct ProgressMeter: View {
     let title: String
     let current: Int
     let target: Int
+    var titleColor: Color = sceneMutedInk
+    var valueColor: Color = sceneInk
+    var trackColor: Color = sceneTrack
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(titleColor)
                 Spacer()
                 Text("\(current.formatted()) / \(target.formatted())")
                     .font(.caption.weight(.bold))
+                    .foregroundStyle(valueColor)
             }
 
             GeometryReader { proxy in
@@ -440,13 +658,13 @@ struct ProgressMeter: View {
 
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.black.opacity(0.08))
+                        .fill(trackColor)
                     Capsule()
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color(red: 0.95, green: 0.78, blue: 0.33),
-                                    Color(red: 0.18, green: 0.46, blue: 0.40),
+                                    sceneSun,
+                                    sceneForest,
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -468,12 +686,131 @@ private struct InfoRow: View {
         HStack(alignment: .top) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(sceneMutedInk)
             Spacer()
             Text(value)
                 .font(.subheadline.weight(.bold))
+                .foregroundStyle(sceneInk)
                 .multilineTextAlignment(.trailing)
         }
+    }
+}
+
+private struct RecentWalkRow: View {
+    let total: RecentDailyTotal
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(total.dayKey)
+                    .font(.subheadline.weight(.black))
+                    .foregroundStyle(sceneInk)
+
+                Text(total.totalSteps >= TerraTreadRules.dailyGoal ? "Goal reached" : "Still below today’s rhythm")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(total.totalSteps >= TerraTreadRules.dailyGoal ? sceneForest : sceneSoftInk)
+            }
+
+            Spacer()
+
+            Text("\(total.totalSteps.formatted()) steps")
+                .font(.subheadline.weight(.black))
+                .foregroundStyle(sceneInk)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    (total.totalSteps >= TerraTreadRules.dailyGoal ? sceneSun.opacity(0.24) : Color.black.opacity(0.05)),
+                    in: Capsule()
+                )
+        }
+        .padding(14)
+        .background(sceneCardTint, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+private struct SyncStatusRow: View {
+    let title: String
+    let value: String
+    let tone: StatusTone
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(indicatorColor)
+                .frame(width: 12, height: 12)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.black))
+                    .foregroundStyle(sceneInk)
+
+                Text(value)
+                    .font(.subheadline)
+                    .foregroundStyle(sceneMutedInk)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(sceneCardTint, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var indicatorColor: Color {
+        switch tone {
+        case .online:
+            sceneForest
+        case .offline:
+            sceneRose
+        case .syncing:
+            sceneSun
+        case .muted:
+            sceneSoftInk
+        }
+    }
+}
+
+private struct SnapshotMetricCard: View {
+    let symbol: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.headline.weight(.black))
+                .foregroundStyle(sceneForest)
+
+            Text(value)
+                .font(.headline.weight(.black))
+                .foregroundStyle(sceneInk)
+
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(sceneMutedInk)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(sceneCardTint, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+private struct CityNarrativePanel: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline.weight(.black))
+                .foregroundStyle(sceneInk)
+
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(sceneMutedInk)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(sceneCardTint, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 
@@ -539,7 +876,11 @@ struct GameSurfaceCard<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color(red: 0.97, green: 0.96, blue: 0.92).opacity(0.97))
+                .fill(sceneCardFill.opacity(0.98))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .strokeBorder(sceneCardStroke)
+                )
                 .shadow(color: Color.black.opacity(0.16), radius: 20, x: 0, y: 12)
         )
     }

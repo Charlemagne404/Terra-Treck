@@ -141,6 +141,8 @@ struct BuildingDefinition: Identifiable {
     let type: BuildingType
     let label: String
     let icon: String
+    let role: String
+    let flavor: String
     let width: Int
     let height: Int
     let cost: Int
@@ -247,6 +249,42 @@ struct BuildingBreakdown: Equatable, Identifiable {
     let synergyDetails: [BuildingSynergyDetail]
 }
 
+enum CityStage: String, Equatable {
+    case homestead
+    case village
+    case township
+    case borough
+    case city
+
+    var label: String {
+        switch self {
+        case .homestead: "Homestead"
+        case .village: "Village"
+        case .township: "Township"
+        case .borough: "Borough"
+        case .city: "City"
+        }
+    }
+
+    var settlementNoun: String {
+        switch self {
+        case .homestead: "Hamlet"
+        case .village: "Village"
+        case .township: "Town"
+        case .borough: "Borough"
+        case .city: "City"
+        }
+    }
+}
+
+struct CityNarrative: Equatable {
+    let title: String
+    let subtitle: String
+    let atmosphere: String
+    let heritage: String
+    let nextChapter: String
+}
+
 struct CitySummary: Equatable {
     var level: Int
     var prosperity: Int
@@ -262,6 +300,8 @@ struct CitySummary: Equatable {
     var buildingCount: Int
     var triggeredSynergies: Int
     var breakdown: [BuildingBreakdown]
+    var stage: CityStage
+    var narrative: CityNarrative
 }
 
 struct ContractEvaluation: Equatable {
@@ -396,6 +436,8 @@ struct AppNotice: Identifiable, Equatable {
 enum TerraTreadRules {
     static let gridSize = 20
     static let startingTerrainOrigin = -(gridSize / 2)
+    static let initialBuildMinCoordinate = startingTerrainOrigin
+    static let initialBuildMaxCoordinate = startingTerrainOrigin + gridSize - 1
     static let worldBuildRadius = 220
     static let worldMinCoordinate = -worldBuildRadius
     static let worldMaxCoordinate = worldBuildRadius
@@ -425,6 +467,8 @@ enum TerraTreadRules {
             type: .house,
             label: "House",
             icon: "house.fill",
+            role: "Founding homes",
+            flavor: "Small homes anchor the first lane of a settlement and keep the city feeling lived in as it grows around them.",
             width: 1,
             height: 1,
             cost: 100,
@@ -439,6 +483,8 @@ enum TerraTreadRules {
             type: .park,
             label: "Park",
             icon: "tree.fill",
+            role: "Green commons",
+            flavor: "Parks soften dense blocks, give neighborhoods breathing room, and make older districts worth preserving.",
             width: 2,
             height: 2,
             cost: 150,
@@ -453,6 +499,8 @@ enum TerraTreadRules {
             type: .shop,
             label: "Shop",
             icon: "storefront.fill",
+            role: "Corner trade",
+            flavor: "Shops turn quiet streets into daily routines, adding the kind of neighborhood commerce that makes a town feel active.",
             width: 2,
             height: 1,
             cost: 200,
@@ -467,6 +515,8 @@ enum TerraTreadRules {
             type: .plaza,
             label: "Plaza",
             icon: "building.columns.fill",
+            role: "Public heart",
+            flavor: "Plazas become shared anchors where newer districts meet older ones and the city starts to feel civic rather than temporary.",
             width: 1,
             height: 2,
             cost: 260,
@@ -481,6 +531,8 @@ enum TerraTreadRules {
             type: .orchard,
             label: "Orchard",
             icon: "carrot.fill",
+            role: "Garden edge",
+            flavor: "Orchards keep the city grounded in the landscape, preserving a softer fringe even as denser blocks appear nearby.",
             width: 2,
             height: 2,
             cost: 240,
@@ -496,6 +548,8 @@ enum TerraTreadRules {
             type: .school,
             label: "School",
             icon: "graduationcap.fill",
+            role: "Civic anchor",
+            flavor: "Schools signal that the settlement is becoming a real town, adding everyday rhythm and long-term permanence.",
             width: 2,
             height: 2,
             cost: 300,
@@ -511,6 +565,8 @@ enum TerraTreadRules {
             type: .market,
             label: "Market",
             icon: "basket.fill",
+            role: "Main street bustle",
+            flavor: "Markets bring concentrated activity and make walk-earned growth feel visible through denser, busier streets.",
             width: 3,
             height: 1,
             cost: 340,
@@ -526,6 +582,8 @@ enum TerraTreadRules {
             type: .library,
             label: "Library",
             icon: "books.vertical.fill",
+            role: "Quiet landmark",
+            flavor: "Libraries add memory and continuity, helping mature districts feel reflective instead of purely transactional.",
             width: 1,
             height: 2,
             cost: 280,
@@ -541,6 +599,8 @@ enum TerraTreadRules {
             type: .workshop,
             label: "Workshop",
             icon: "gearshape.2.fill",
+            role: "Maker district",
+            flavor: "Workshops represent practical growth: a town that has enough stability to build, repair, and expand itself.",
             width: 2,
             height: 1,
             cost: 380,
